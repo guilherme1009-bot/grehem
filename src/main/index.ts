@@ -1,101 +1,43 @@
-import { app, BrowserWindow, BrowserView, WebContentsView, ipcMain, session } from 'electron'
+import { app, BrowserWindow, WebContentsView, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { BrowserTab } from '../shared/types'
+import { DatabaseConnection } from './database/connection'
+import { ProfileRepository } from './database/repositories/profile-repository'
+import { SettingsRepository } from './database/repositories/settings-repository'
+import { HistoryRepository } from './database/repositories/history-repository'
+import { BookmarkRepository } from './database/repositories/bookmark-repository'
+import { BookmarkFolderRepository } from './database/repositories/bookmark-folder-repository'
+import { SearchEngineRepository } from './database/repositories/search-engine-repository'
+import { SearchService } from './services/search/search-service'
 
 const HOME_URL = 'grehem://newtab'
-const SEARCH_URL = 'https://www.google.com/search?q='
-
 interface ManagedTab extends BrowserTab { view?: WebContentsView }
-let mainWindow: BrowserWindow | null = null
-let activeTabId = ''
-const tabs = new Map<string, ManagedTab>()
-const closedTabs: Array<{ url: string; title: string }> = []
-
+let mainWindow: BrowserWindow | null = null; let activeTabId = ''; const tabs = new Map<string, ManagedTab>(); const closedTabs: Array<{ url: string; title: string }> = []
+let database: DatabaseConnection; let profileId = 0; let historyRepository: HistoryRepository; let bookmarkRepository: BookmarkRepository; let folderRepository: BookmarkFolderRepository; let settingsRepository: SettingsRepository; let searchEngineRepository: SearchEngineRepository; let searchService: SearchService
+const text = (value: unknown, max: number): string | null => typeof value === 'string' && value.trim().length > 0 && value.length <= max ? value.trim() : null
+const positiveId = (value: unknown): number | null => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+const validTabId = (value: unknown): string => { if (typeof value !== 'string' || value.length === 0 || value.length > 100) throw new Error('Aba inválida'); return value }
 function getTab(id: string) { return tabs.get(id) }
 function snapshot(tab: ManagedTab): BrowserTab { return { id: tab.id, title: tab.title, url: tab.url, favicon: tab.favicon, isLoading: tab.isLoading, canGoBack: tab.canGoBack, canGoForward: tab.canGoForward, isPinned: tab.isPinned, kind: tab.kind } }
 function emit(channel: string, value: unknown) { mainWindow?.webContents.send(channel, value) }
 function emitTab(tab: ManagedTab) { emit('tab:update', snapshot(tab)) }
-function setBounds() {
-  if (!mainWindow) return
-  const [width, height] = mainWindow.getContentSize()
-  for (const tab of tabs.values()) if (tab.view && tab.id === activeTabId) tab.view.setBounds({ x: 0, y: 112, width, height: Math.max(0, height - 112) })
-}
+function setBounds() { if (!mainWindow) return; const [width, height] = mainWindow.getContentSize(); getTab(activeTabId)?.view?.setBounds({ x: 0, y: 112, width, height: Math.max(0, height - 112) }) }
 function detach(tab: ManagedTab) { if (tab.view && mainWindow) mainWindow.contentView.removeChildView(tab.view) }
-function attach(tab: ManagedTab) {
-  if (!mainWindow || !tab.view) return
-  mainWindow.contentView.addChildView(tab.view)
-  setBounds()
-}
-function parseInput(input: string) {
-  const value = input.trim()
-  if (!value) return HOME_URL
-  if (/^grehem:\/\//i.test(value)) return value
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(value)) return value
-  if (/^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(value) || value.includes('.')) return `https://${value}`
-  return `${SEARCH_URL}${encodeURIComponent(value)}`
-}
-function wireView(tab: ManagedTab) {
-  const wc = tab.view!.webContents
-  wc.on('did-start-loading', () => { tab.isLoading = true; emitTab(tab) })
-  wc.on('did-stop-loading', () => { tab.isLoading = false; tab.canGoBack = wc.canGoBack(); tab.canGoForward = wc.canGoForward(); emitTab(tab) })
-  wc.on('page-title-updated', (_event, title) => { tab.title = title || 'Nova aba'; emitTab(tab) })
-  wc.on('page-favicon-updated', (_event, favicons) => { tab.favicon = favicons[0]; emitTab(tab) })
-  wc.on('did-navigate', (_event, url) => { tab.url = url; tab.kind = 'web'; tab.canGoBack = wc.canGoBack(); tab.canGoForward = wc.canGoForward(); emitTab(tab) })
-  wc.on('did-navigate-in-page', (_event, url) => { tab.url = url; emitTab(tab) })
-  wc.on('render-process-gone', () => { tab.isLoading = false; tab.title = 'Página encerrada'; emitTab(tab) })
-}
-async function createTab(url = HOME_URL): Promise<BrowserTab> {
-  const id = randomUUID()
-  const isHome = url.startsWith('grehem://')
-  const tab: ManagedTab = { id, title: isHome ? 'Nova aba' : 'Carregando…', url, isLoading: !isHome, canGoBack: false, canGoForward: false, isPinned: false, kind: isHome ? 'newtab' : 'web' }
-  if (!isHome) { tab.view = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: `persist:profile-${app.getName()}` } }); wireView(tab); await tab.view.webContents.loadURL(url) }
-  tabs.set(id, tab)
-  await activateTab(id)
-  return snapshot(tab)
-}
-async function activateTab(id: string) {
-  const next = getTab(id); if (!next || !mainWindow) return
-  const previous = getTab(activeTabId); if (previous && previous.id !== id) detach(previous)
-  activeTabId = id
-  if (next.view) attach(next)
-  emit('tab:active', id)
-  emitTab(next)
-}
-async function navigate(id: string, input: string) {
-  const tab = getTab(id); if (!tab) return
-  const url = parseInput(input)
-  if (url.startsWith('grehem://')) { if (tab.view) { tab.view.webContents.close(); tab.view = undefined } tab.url = url; tab.title = 'Nova aba'; tab.kind = 'newtab'; tab.isLoading = false; emitTab(tab); return }
-  if (!tab.view) { tab.view = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } }); wireView(tab); if (tab.id === activeTabId) attach(tab) }
-  tab.kind = 'web'; tab.url = url; tab.isLoading = true; emitTab(tab); await tab.view.webContents.loadURL(url)
-}
-async function closeTab(id: string) {
-  const tab = getTab(id); if (!tab) return false
-  closedTabs.push({ url: tab.url, title: tab.title }); if (closedTabs.length > 20) closedTabs.shift()
-  detach(tab); tab.view?.webContents.close(); tabs.delete(id)
-  if (tabs.size === 0) { await createTab(); return true }
-  if (activeTabId === id) await activateTab(Array.from(tabs.keys())[Math.max(0, Array.from(tabs.keys()).indexOf(id) - 1)])
-  else emit('tab:active', activeTabId)
-  emit('tabs:list', Array.from(tabs.values()).map(snapshot)); return true
-}
+function attach(tab: ManagedTab) { if (mainWindow && tab.view) { mainWindow.contentView.addChildView(tab.view); setBounds() } }
+function wireView(tab: ManagedTab) { const wc = tab.view!.webContents; wc.on('did-start-loading', () => { tab.isLoading = true; emitTab(tab) }); wc.on('did-stop-loading', () => { tab.isLoading = false; tab.canGoBack = wc.canGoBack(); tab.canGoForward = wc.canGoForward(); emitTab(tab) }); wc.on('page-title-updated', (_event, title) => { tab.title = title || 'Nova aba'; emitTab(tab) }); wc.on('page-favicon-updated', (_event, icons) => { tab.favicon = icons[0]; emitTab(tab) }); wc.on('did-navigate', (_event, url) => { tab.url = url; tab.kind = 'web'; tab.canGoBack = wc.canGoBack(); tab.canGoForward = wc.canGoForward(); if (!url.startsWith('grehem://')) historyRepository.add(profileId, url, tab.title, tab.favicon ?? null); emitTab(tab) }); wc.on('did-navigate-in-page', (_event, url) => { tab.url = url; emitTab(tab) }) }
+function viewFor(tab: ManagedTab): WebContentsView { if (!tab.view) { tab.view = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'persist:profile-default' } }); wireView(tab) } return tab.view }
+async function createTab(url = HOME_URL): Promise<BrowserTab> { const home = url.startsWith('grehem://'); const tab: ManagedTab = { id: randomUUID(), title: home ? 'Nova aba' : 'Carregando…', url, isLoading: !home, canGoBack: false, canGoForward: false, isPinned: false, kind: home ? 'newtab' : 'web' }; if (!home) { await viewFor(tab).webContents.loadURL(url) } tabs.set(tab.id, tab); await activateTab(tab.id); return snapshot(tab) }
+async function activateTab(id: string) { const next = getTab(id); if (!next || !mainWindow) return; const previous = getTab(activeTabId); if (previous && previous.id !== id) detach(previous); activeTabId = id; if (next.view) attach(next); emit('tab:active', id); emitTab(next) }
+async function navigate(id: string, input: string) { const tab = getTab(id); const value = text(input, 2048); if (!tab || value === null) throw new Error('Entrada inválida'); const url = searchService.resolve(value); if (url.startsWith('grehem://')) { if (tab.view) { tab.view.webContents.close(); tab.view = undefined } tab.url = url; tab.title = 'Nova aba'; tab.kind = 'newtab'; tab.isLoading = false; emitTab(tab); return } const view = viewFor(tab); if (tab.id === activeTabId) attach(tab); tab.kind = 'web'; tab.url = url; tab.isLoading = true; emitTab(tab); await view.webContents.loadURL(url) }
+async function closeTab(id: string) { const tab = getTab(id); if (!tab) return false; closedTabs.push({ url: tab.url, title: tab.title }); if (closedTabs.length > 20) closedTabs.shift(); detach(tab); tab.view?.webContents.close(); tabs.delete(id); if (!tabs.size) await createTab(); else if (activeTabId === id) await activateTab(Array.from(tabs.keys())[0]); emit('tabs:list', Array.from(tabs.values()).map(snapshot)); return true }
 function registerIpc() {
-  ipcMain.handle('tabs:list', () => Array.from(tabs.values()).map(snapshot))
-  ipcMain.handle('tabs:create', (_e, url?: string) => createTab(url))
-  ipcMain.handle('tabs:close', (_e, id: string) => closeTab(id))
-  ipcMain.handle('tabs:activate', (_e, id: string) => activateTab(id))
-  ipcMain.handle('tabs:navigate', (_e, id: string, input: string) => navigate(id, input))
-  ipcMain.handle('tabs:back', (_e, id: string) => getTab(id)?.view?.webContents.goBack())
-  ipcMain.handle('tabs:forward', (_e, id: string) => getTab(id)?.view?.webContents.goForward())
-  ipcMain.handle('tabs:reload', (_e, id: string) => getTab(id)?.view?.webContents.reload())
-  ipcMain.handle('tabs:stop', (_e, id: string) => getTab(id)?.view?.webContents.stop())
-  ipcMain.handle('tabs:reopen', (_e) => { const item = closedTabs.pop(); return item ? createTab(item.url) : null })
+  ipcMain.handle('tabs:list', () => Array.from(tabs.values()).map(snapshot)); ipcMain.handle('tabs:create', (_event, url?: unknown) => createTab(url === undefined ? HOME_URL : text(url, 2048) ?? HOME_URL)); ipcMain.handle('tabs:close', (_event, id: unknown) => closeTab(validTabId(id))); ipcMain.handle('tabs:activate', (_event, id: unknown) => activateTab(validTabId(id))); ipcMain.handle('tabs:navigate', (_event, id: unknown, input: unknown) => navigate(validTabId(id), typeof input === 'string' ? input : ''));
+  ipcMain.handle('tabs:back', (_event, id: unknown) => getTab(validTabId(id))?.view?.webContents.goBack()); ipcMain.handle('tabs:forward', (_event, id: unknown) => getTab(validTabId(id))?.view?.webContents.goForward()); ipcMain.handle('tabs:reload', (_event, id: unknown) => getTab(validTabId(id))?.view?.webContents.reload()); ipcMain.handle('tabs:stop', (_event, id: unknown) => getTab(validTabId(id))?.view?.webContents.stop()); ipcMain.handle('tabs:reopen', () => { const item = closedTabs.pop(); return item ? createTab(item.url) : null });
+  ipcMain.handle('settings:list', () => settingsRepository.list(profileId)); ipcMain.handle('settings:set', (_event, key: unknown, value: unknown) => { const validKey = text(key, 100); const validValue = text(value, 1000); if (!validKey || validValue === null) throw new Error('Configuração inválida'); settingsRepository.set(profileId, validKey, validValue) });
+  ipcMain.handle('history:list', (_event, query?: unknown) => historyRepository.list(profileId, query === undefined ? '' : text(query, 200) ?? '')); ipcMain.handle('history:delete', (_event, id: unknown) => { const value = positiveId(id); if (!value) throw new Error('Histórico inválido'); historyRepository.delete(profileId, value) }); ipcMain.handle('history:clear', () => historyRepository.clear(profileId));
+  ipcMain.handle('bookmarks:list', (_event, query?: unknown) => bookmarkRepository.list(profileId, query === undefined ? '' : text(query, 200) ?? '')); ipcMain.handle('bookmarks:create', (_event, title: unknown, url: unknown) => { const validTitle = text(title, 500); const validUrl = text(url, 2048); if (!validTitle || !validUrl) throw new Error('Favorito inválido'); return bookmarkRepository.create(profileId, validTitle, validUrl) }); ipcMain.handle('bookmarks:delete', (_event, id: unknown) => { const value = positiveId(id); if (!value) throw new Error('Favorito inválido'); bookmarkRepository.delete(profileId, value) }); ipcMain.handle('bookmark-folders:list', () => folderRepository.list(profileId)); ipcMain.handle('search-engines:list', () => searchEngineRepository.list(profileId))
 }
-async function createWindow() {
-  mainWindow = new BrowserWindow({ width: 1366, height: 820, minWidth: 900, minHeight: 600, backgroundColor: '#f7f8fa', title: 'Grehem Browser', webPreferences: { preload: join(__dirname, '../preload/index.mjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } })
-  mainWindow.on('resize', setBounds)
-  mainWindow.on('closed', () => { mainWindow = null })
-  await mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL || `file://${join(__dirname, '../renderer/index.html')}`)
-  await createTab()
-}
-app.whenReady().then(() => { registerIpc(); session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => callback(['media', 'geolocation', 'notifications'].includes(permission) ? false : false)); createWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() }) })
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+function initializeData() { database = new DatabaseConnection(join(app.getPath('userData'), 'grehem.sqlite')); database.migrate(); const profile = new ProfileRepository(database.db).getDefault(); profileId = profile.id; settingsRepository = new SettingsRepository(database.db); settingsRepository.seed(profileId, { language: 'pt-BR', theme: 'light', zoom: '100', searchEngine: 'Google', homePage: HOME_URL }); searchEngineRepository = new SearchEngineRepository(database.db); if (!searchEngineRepository.list(profileId).length) { searchEngineRepository.create(profileId, 'Google', 'https://www.google.com/search?q=%s', 'google', true, true); searchEngineRepository.create(profileId, 'Bing', 'https://www.bing.com/search?q=%s', 'bing', true); searchEngineRepository.create(profileId, 'DuckDuckGo', 'https://duckduckgo.com/?q=%s', 'ddg', true) } searchService = new SearchService(searchEngineRepository, profileId); historyRepository = new HistoryRepository(database.db); bookmarkRepository = new BookmarkRepository(database.db); folderRepository = new BookmarkFolderRepository(database.db) }
+async function createWindow() { mainWindow = new BrowserWindow({ width: 1366, height: 820, minWidth: 900, minHeight: 600, backgroundColor: '#f7f8fa', title: 'Grehem Browser', webPreferences: { preload: join(__dirname, '../preload/index.mjs'), contextIsolation: true, sandbox: true, nodeIntegration: false } }); mainWindow.on('resize', setBounds); mainWindow.on('closed', () => { mainWindow = null }); await mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL || `file://${join(__dirname, '../renderer/index.html')}`); await createTab() }
+app.whenReady().then(() => { initializeData(); registerIpc(); session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false)); void createWindow(); app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) void createWindow() }) }); app.on('before-quit', () => database?.close()); app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })

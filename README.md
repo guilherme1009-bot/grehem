@@ -1,6 +1,6 @@
 # Grehem Browser
 
-Base da Fase 1: um navegador desktop Electron + Chromium com navegação real, múltiplas abas e uma interface clara.
+Fundação Electron + Chromium do Grehem Browser, com dados locais e pesquisa configurável.
 
 ## Desenvolvimento
 
@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-## Verificações
+## Verificação local
 
 ```bash
 npm run typecheck
@@ -17,11 +17,6 @@ npm test
 npm run build
 ```
 
-A criação do instalador Windows fica disponível com `npm run package:win`.
+O SQLite é criado automaticamente em `app.getPath('userData')/grehem.sqlite`. A migration `001_initial` cria o perfil local, configurações, histórico, favoritos, pastas e mecanismos de pesquisa. Os dados não são gravados no código-fonte.
 
-## Arquitetura inicial
-
-- `src/main`: processo principal, janelas e gerenciamento seguro de abas Chromium.
-- `src/preload`: ponte IPC mínima e validada.
-- `src/renderer`: interface React da barra de navegação e nova aba.
-- `src/shared`: contratos compartilhados entre os processos.
+A Fase 2A adiciona apenas a fundação de dados e IPC. As interfaces completas de histórico, favoritos e configurações permanecem para etapas posteriores.
