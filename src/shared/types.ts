@@ -7,7 +7,7 @@ export interface BrowserAPI {
   history: { list: (query?: string) => Promise<HistoryEntry[]>; delete: (id: number) => Promise<void>; clear: () => Promise<void> }
   bookmarks: { list: (query?: string) => Promise<Bookmark[]>; findByUrl: (url: string) => Promise<Bookmark | null>; create: (title: string, url: string, folderId?: number | null) => Promise<Bookmark>; delete: (id: number) => Promise<void> }
   bookmarkFolders: { list: () => Promise<BookmarkFolder[]>; create: (name: string, parentId?: number | null) => Promise<BookmarkFolder> }
-  searchEngines: { list: () => Promise<SearchEngine[]>; setDefault: (id: number) => Promise<void>; create: (name: string, keyword: string, searchUrl: string) => Promise<SearchEngine> }
+  searchEngines: { list: () => Promise<SearchEngine[]>; setDefault: (id: number) => Promise<void>; create: (name: string, keyword: string, searchUrl: string) => Promise<SearchEngine>; delete: (id: number) => Promise<void> }
   onTabUpdate: (callback: (tab: BrowserTab) => void) => () => void
   onActiveTab: (callback: (id: string) => void) => () => void
   onNewTab: (callback: () => void) => () => void
