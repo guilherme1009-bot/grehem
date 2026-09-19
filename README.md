@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-## Verificação local
+## Verificação local pendente
 
 ```bash
 npm run typecheck
@@ -17,4 +17,4 @@ npm test
 npm run build
 ```
 
-A Fase 2B conecta a fundação SQLite/IPC à interface: o usuário pode pesquisar usando o mecanismo padrão, consultar e limpar histórico, adicionar/remover favoritos e alterar configurações básicas. A validação desses comandos permanece pendente no ambiente local.
+Esta revisão endurece a navegação para aceitar somente `http`, `https` e `grehem`, valida associação de perfil em favoritos/pastas/mecanismos, evita duplicações consecutivas de histórico e prepara o rebuild de `better-sqlite3` pelo `electron-builder`. Os comandos acima ainda precisam ser executados em um ambiente local compatível com Electron 33.
