@@ -35,7 +35,7 @@
   },
   "build": {
     "appId": "site.sazamtecnologia.grehem",
-    "productName": "Grehem Browser",
+    "productName": "Grehem",
     "files": ["dist-electron/**/*", "dist/**/*", "package.json"],
     "win": { "target": "nsis", "artifactName": "Grehem-Setup-${version}.${ext}" },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }

@@ -7,7 +7,7 @@ const api: BrowserAPI = {
   bookmarks: { list: (query) => ipcRenderer.invoke('bookmarks:list', query), findByUrl: (url) => ipcRenderer.invoke('bookmarks:find-by-url', url), create: (title, url, folderId) => ipcRenderer.invoke('bookmarks:create', title, url, folderId), delete: (id) => ipcRenderer.invoke('bookmarks:delete', id) },
   bookmarkFolders: { list: () => ipcRenderer.invoke('bookmark-folders:list'), create: (name, parentId) => ipcRenderer.invoke('bookmark-folders:create', name, parentId) },
   searchEngines: { list: () => ipcRenderer.invoke('search-engines:list'), setDefault: (id) => ipcRenderer.invoke('search-engines:set-default', id), create: (name, keyword, searchUrl) => ipcRenderer.invoke('search-engines:create', name, keyword, searchUrl), delete: (id) => ipcRenderer.invoke('search-engines:delete', id) },
-  onTabUpdate: (callback) => { const listener = (_event: Electron.IpcRendererEvent, tab: Parameters<NonNullable<BrowserAPI['onTabUpdate']>>[0]) => callback(tab); ipcRenderer.on('tab:update', listener); return () => ipcRenderer.removeListener('tab:update', listener) },
+  onTabUpdate: (callback) => { const listener = (_event: Electron.IpcRendererEvent, tab: BrowserTab) => callback(tab); ipcRenderer.on('tab:update', listener); return () => ipcRenderer.removeListener('tab:update', listener) },
   onActiveTab: (callback) => { const listener = (_event: Electron.IpcRendererEvent, id: string) => callback(id); ipcRenderer.on('tab:active', listener); return () => ipcRenderer.removeListener('tab:active', listener) },
   onNewTab: (callback) => { const listener = () => callback(); ipcRenderer.on('tab:new', listener); return () => ipcRenderer.removeListener('tab:new', listener) }
 }
