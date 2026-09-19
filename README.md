@@ -1,6 +1,6 @@
 # Grehem Browser
 
-Fundação Electron + Chromium do Grehem Browser, com dados locais e pesquisa configurável.
+Electron + Chromium do Grehem Browser, com banco SQLite local, pesquisa configurável, histórico e favoritos persistentes.
 
 ## Desenvolvimento
 
@@ -17,6 +17,4 @@ npm test
 npm run build
 ```
 
-O SQLite é criado automaticamente em `app.getPath('userData')/grehem.sqlite`. A migration `001_initial` cria o perfil local, configurações, histórico, favoritos, pastas e mecanismos de pesquisa. Os dados não são gravados no código-fonte.
-
-A Fase 2A adiciona apenas a fundação de dados e IPC. As interfaces completas de histórico, favoritos e configurações permanecem para etapas posteriores.
+A Fase 2B conecta a fundação SQLite/IPC à interface: o usuário pode pesquisar usando o mecanismo padrão, consultar e limpar histórico, adicionar/remover favoritos e alterar configurações básicas. A validação desses comandos permanece pendente no ambiente local.

@@ -1,0 +1,23 @@
+import type { SqliteDatabase } from '../connection'
+
+export interface SearchEngine { id: number; profile_id: number; name: string; search_url: string; keyword: string; is_default: number; is_builtin: number; created_at: string; updated_at: string }
+
+const required = (value: string, field: string) => {
+  const normalized = value.trim()
+  if (!normalized) throw new Error(`${field} must not be be empty`)
+  return normalized
+}
+
+export class SearchEngineRepository {
+  constructor(private readonly db: SqliteDatabase) {}
+  list(profileId: number): SearchEngine[] { return this.db.prepare('SELECT * FROM search_engines WHERE profile_id = ? ORDER BY is_default DESC, name').all(profileId) as SearchEngine[] }
+  getDefault(profileId: number): SearchEngine | undefined { return this.db.prepare('SELECT * FROM search_engines WHERE profile_id = ? AND is_default = 1 LIMIT 1').get(profileId) as SearchEngine | undefined }
+  create(profileId: number, name: string, searchUrl: string, keyword: string, builtin = false, isDefault = false): SearchEngine {
+    const validName = required(name, 'name'); const validUrl = required(searchUrl, 'search_url'); const validKeyword = required(keyword, 'keyword')
+    if (!validUrl.includes('%s')) throw new Error('search_url must contain the %s placeholder')
+    const id = this.db.transaction(() => { if (isDefault) this.db.prepare('UPDATE search_engines SET is_default = 0 WHERE profile_id = ?').run(profileId); return this.db.prepare('INSERT INTO search_engines (profile_id, name, search_url, keyword, is_builtin, is_default) VALUES (?, ?, ?, ?, ?, ?)').run(profileId, validName, validUrl, validKeyword, builtin ? 1 : 0, isDefault ? 1 : 0).lastInsertRowid })() as number
+    return this.db.prepare('SELECT * FROM search_engines WHERE id = ?').get(id) as SearchEngine
+  }
+  setDefault(profileId: number, engineId: number): void { this.db.transaction(() => { this.db.prepare('UPDATE search_engines SET is_default = 0 WHERE profile_id = ?').run(profileId); this.db.prepare('UPDATE search_engines SET is_default = 1 WHERE profile_id = ? AND id = ?').run(profileId, engineId) })() }
+  delete(profileId: number, engineId: number): void { this.db.prepare('DELETE FROM search_engines WHERE profile_id = ? AND id = ? AND is_builtin = 0').run(profileId, engineId) }
+}
