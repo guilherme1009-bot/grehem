@@ -1,0 +1,11 @@
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkCheck, Globe, LockKeyhole, RotateCw, Search, ShieldAlert, X } from 'lucide-react'
+import type { BrowserTab } from '../../../shared/types'
+
+interface NavigationBarProps { active?: BrowserTab; address: string; isBookmarked: boolean; addressRef: React.RefObject<HTMLInputElement>; onAddressChange: (value: string) => void; onNavigate: () => void; onBack: () => void; onForward: () => void; onReload: () => void; onToggleBookmark: () => void; onFocusAddress: () => void }
+
+function securityIcon(url: string) { if (url.startsWith('https://')) return <LockKeyhole size={15} />; if (url.startsWith('http://')) return <ShieldAlert size={15} />; if (url.startsWith('grehem://')) return <Globe size={15} />; return <Search size={15} /> }
+
+export function NavigationBar({ active, address, isBookmarked, addressRef, onAddressChange, onNavigate, onBack, onForward, onReload, onToggleBookmark, onFocusAddress }: NavigationBarProps) {
+  const loading = Boolean(active?.isLoading)
+  return <div className="navigation-bar"><div className="navigation-controls"><button className="chrome-button" disabled={!active?.canGoBack} onClick={onBack} aria-label="Voltar"><ArrowLeft size={17} /></button><button className="chrome-button" disabled={!active?.canGoForward} onClick={onForward} aria-label="Avançar"><ArrowRight size={17} /></button><button className="chrome-button" onClick={onReload} aria-label={loading ? 'Parar carregamento' : 'Recarregar'}>{loading ? <X size={17} /> : <RotateCw size={17} />}</button></div><div className="address-bar"><span className={`security-indicator ${address.startsWith('http://') ? 'is-insecure' : ''}`} aria-label={address.startsWith('https://') ? 'Conexão HTTPS' : 'Informação do endereço'}>{securityIcon(address)}</span><input ref={addressRef} value={address} onChange={(event) => onAddressChange(event.target.value)} onFocus={onFocusAddress} onKeyDown={(event) => { if (event.key === 'Enter') onNavigate() }} placeholder="Pesquisar ou digitar um endereço" aria-label="Barra de endereço" /><button className={`address-action ${isBookmarked ? 'is-selected' : ''}`} onClick={onToggleBookmark} aria-label={isBookmarked ? 'Remover favorito' : 'Adicionar favorito'}>{isBookmarked ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}</button></div></div>
+}

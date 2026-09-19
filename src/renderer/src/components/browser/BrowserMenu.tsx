@@ -1,0 +1,7 @@
+import { Bookmark, Download, History, HelpCircle, Settings, UserRound, X } from 'lucide-react'
+
+interface BrowserMenuProps { onClose: () => void; onNewTab: () => void; onPanel: (panel: 'history' | 'bookmarks' | 'settings') => void }
+export function BrowserMenu({ onClose, onNewTab, onPanel }: BrowserMenuProps) {
+  const action = (callback: () => void) => { callback(); onClose() }
+  return <div className="menu-popover" role="menu" aria-label="Menu principal"><button role="menuitem" onClick={() => action(onNewTab)}><span>Nova aba</span><kbd>Ctrl+T</kbd></button><button role="menuitem" onClick={() => action(() => onPanel('history'))}><History size={16} /><span>Histórico</span></button><button role="menuitem" onClick={() => action(() => onPanel('bookmarks'))}><Bookmark size={16} /><span>Favoritos</span></button><button role="menuitem" onClick={() => action(() => onPanel('settings'))}><Settings size={16} /><span>Configurações</span></button><button role="menuitem" disabled><Download size={16} /><span>Downloads</span><small>Em breve</small></button><button role="menuitem" disabled><UserRound size={16} /><span>Perfil</span><small>Em breve</small></button><div className="menu-divider" /><button role="menuitem" disabled><HelpCircle size={16} /><span>Ajuda</span><small>Em breve</small></button><button role="menuitem" onClick={onClose}><X size={16} /><span>Fechar menu</span></button></div>
+}
