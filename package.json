@@ -1,0 +1,41 @@
+{
+  "name": "grehem-browser",
+  "version": "0.1.0",
+  "description": "Grehem Browser — uma experiência de navegação clara e moderna.",
+  "main": "dist-electron/main.js",
+  "author": "Sazam Tecnologia",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package:win": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.5"
+  },
+  "build": {
+    "appId": "site.sazamtecnologia.grehem",
+    "productName": "Grehem Browser",
+    "files": ["dist-electron/**/*", "dist/**/*", "package.json"],
+    "win": { "target": "nsis", "artifactName": "Grehem-Setup-${version}.${ext}" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }
+  }
+}
